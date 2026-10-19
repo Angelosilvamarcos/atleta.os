@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import ExerciseLibrary from "./ExerciseLibrary.jsx";
 
 // ── OFFLINE-FIRST STORAGE ──────────────────────────────────────────────────
 const store = {
@@ -269,6 +270,7 @@ const MENU_ITEMS = [
   { id: "academia",    icon: "🏋️", label: "Academia",     sub: "Musculação & Força",   color: C.pink },
   { id: "provas",      icon: "🏆", label: "Provas 2026",  sub: "Calendário & Tempos",  color: C.purple },
   { id: "treino-dia",  icon: "📋", label: "Treino do Dia",sub: "Sequência cronometrada",color: "#06b6d4" },
+  { id: "biblioteca", icon: "🧩", label: "Biblioteca 5 km", sub: "Técnica, força & coordenação", color: C.accent },
 ];
 
 function HomeMenu({ onSelect }) {
@@ -1973,6 +1975,7 @@ export default function App() {
     academia:<ModuloAcademia onBack={()=>setScreen("home")}/>,
     provas:<ModuloProvas onBack={()=>setScreen("home")}/>,
     "treino-dia":<ModuloTreinoDia onBack={()=>setScreen("home")}/>,
+    biblioteca:<ExerciseLibrary onBack={()=>setScreen("home")}/>,
   };
   return <div style={{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"system-ui,-apple-system,sans-serif"}}>
     <div style={{position:"sticky",top:0,zIndex:100,background:"rgba(10,10,10,.97)",backdropFilter:"blur(10px)",borderBottom:"1px solid "+C.border,padding:"10px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
