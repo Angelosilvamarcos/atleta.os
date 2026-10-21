@@ -370,13 +370,13 @@ function ModuloCorrida({ onBack }) {
     (async () => {
       try {
         const r = await store.get("runtarget_v3");
-        if (r && r.value) { const d = JSON.parse(r.value); if (Array.isArray(d) && d.length) setLogs(d); }
+        if (r && r.value) { const d = JSON.parse(r.value); if (Array.isArray(d) && d.length) setLogs(d); } else { const legacy = JSON.parse(localStorage.getItem("rt_logs") || "null"); if (Array.isArray(legacy) && legacy.length) setLogs(legacy); }
       } catch (_) {}
     })();
   }, []);
 
   const persist = useCallback(async (nl) => {
-    try { await store.set("runtarget_v3", JSON.stringify(nl)); } catch (_) {}
+    try { await store.set("runtarget_v3", JSON.stringify(nl)); localStorage.setItem("rt_logs", JSON.stringify(nl)); } catch (_) {}
   }, []);
 
   const races      = logs.filter(l => l.result5k && parseTime(l.result5k));
@@ -1946,8 +1946,8 @@ function OnboardingScreen({onComplete}) {
         <div style={{fontSize:26,fontWeight:900,marginBottom:8}}>Vamos configurar seu perfil</div>
         <div style={{fontSize:14,color:C.muted,marginBottom:22}}>Esses dados serão usados para personalizar o ATLETAOS.</div>
         <AuthInput label="Nome" value={data.nome} onChange={e=>setData(p=>({...p,nome:e.target.value}))} placeholder="Ex.: Angelo"/>
-        <AuthInput label="E-mail" type="email" value={data.email} onChange={e=>setData(p=>({...p,email:e.target.value}))} placeholder="seu@email.com"/>
-        <AuthInput label="Senha" type="password" value={data.password} onChange={e=>setData(p=>({...p,password:e.target.value}))} placeholder="Crie uma senha"/>
+        <AuthInput label="PIN de acesso (4 dígitos)" type="password" inputMode="numeric" value={data.pin} onChange={e=>setData(p=>({...p,pin:e.target.value.replace(/[^0-9]/g,"").slice(0,8)}))} placeholder="1234"/>
+        
         <div style={baseLbl}>Distância principal</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:6}}>{[{v:"5km",l:"5 KM"},{v:"10km",l:"10 KM"},{v:"21km",l:"MEIA"},{v:"42km",l:"MARATONA"}].map(f=>{const a=data.foco===f.v;return <button key={f.v} onClick={()=>setData(p=>({...p,foco:f.v}))} style={{padding:14,background:a?C.accent+"22":C.card,color:a?C.accent:C.text2,border:"1px solid "+(a?C.accent+"66":C.border),borderRadius:10,cursor:"pointer",fontWeight:a?900:400}}>{f.l}</button>})}</div>
       </div>}
