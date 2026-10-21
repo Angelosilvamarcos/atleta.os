@@ -29,15 +29,28 @@ export default function BiomechanicsCamera({onBack=()=>{}}){
  };
  useEffect(()=>()=>{if(rafRef.current)cancelAnimationFrame(rafRef.current);streamRef.current?.getTracks().forEach(t=>t.stop());landmarkerRef.current?.close?.();},[]);
  const start=async()=>{
+  let stage="verificar suporte à câmera";
   setError("");setCameraState("starting");
   try{
-   if(!navigator.mediaDevices?.getUserMedia)throw new Error("Câmera indisponível. Abra o app em HTTPS e use um navegador compatível.");
-   const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment",width:{ideal:1280},height:{ideal:720}},audio:false});
+   if(!navigator.mediaDevices?.getUserMedia)throw new Error("Câmera indisponível neste navegador. Abra o endereço HTTPS no Chrome e verifique as permissões do site.");
+   stage="solicitar permissão e abrir a câmera";
+   let stream;
+   try { stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}},audio:false}); }
+   catch(cameraError) { if(cameraError?.name==="OverconstrainedError"||cameraError?.name==="NotFoundError") stream=await navigator.mediaDevices.getUserMedia({video:true,audio:false}); else throw cameraError; }
    streamRef.current=stream;
-   const video=videoRef.current;video.srcObject=stream;await video.play();
+   stage="iniciar a imagem da câmera";
+   const video=videoRef.current;
+   if(!video)throw new Error("A área de vídeo não está pronta. Atualize a página e tente novamente.");
+   video.srcObject=stream;await video.play();
+   stage="carregar o módulo de análise";
    const vision=await import("@mediapipe/tasks-vision");
+   stage="baixar os arquivos de visão computacional";
    const fileset=await vision.FilesetResolver.forVisionTasks(VISION_WASM);
-   const landmarker=await vision.PoseLandmarker.createFromOptions(fileset,{baseOptions:{modelAssetPath:POSE_MODEL,delegate:"GPU"},runningMode:"VIDEO",numPoses:1,minPoseDetectionConfidence:.5,minPosePresenceConfidence:.5,minTrackingConfidence:.5});
+   stage="iniciar o modelo de detecção (GPU/CPU)";
+   const options={runningMode:"VIDEO",numPoses:1,minPoseDetectionConfidence:.5,minPosePresenceConfidence:.5,minTrackingConfidence:.5};
+   let landmarker;
+   try { landmarker=await vision.PoseLandmarker.createFromOptions(fileset,{...options,baseOptions:{modelAssetPath:POSE_MODEL,delegate:"GPU"}}); }
+   catch(gpuError) { landmarker=await vision.PoseLandmarker.createFromOptions(fileset,{...options,baseOptions:{modelAssetPath:POSE_MODEL,delegate:"CPU"}}); }
    landmarkerRef.current=landmarker;setCameraState("active");
    const draw=()=>{
     if(!videoRef.current||!canvasRef.current||!landmarkerRef.current)return;
@@ -59,7 +72,17 @@ export default function BiomechanicsCamera({onBack=()=>{}}){
     rafRef.current=requestAnimationFrame(draw);
    };
    rafRef.current=requestAnimationFrame(draw);
-  }catch(e){setError(e?.name==="NotAllowedError"?"Permissão da câmera negada. Autorize a câmera nas configurações do navegador e tente novamente.":(e?.message||"Não foi possível iniciar a câmera."));setCameraState("error");streamRef.current?.getTracks().forEach(t=>t.stop());streamRef.current=null;}
+  }catch(e){
+   const detail=e?.name==="NotAllowedError"?"Permissão da câmera negada ou bloqueada. No Chrome, toque no ícone ao lado do endereço > Permissões do site > Câmera > Permitir e recarregue a página."
+    :e?.name==="NotFoundError"?"Nenhuma câmera foi encontrada neste dispositivo."
+    :e?.name==="NotReadableError"?"A câmera está ocupada por outro aplicativo. Feche outros apps que usam a câmera e tente novamente."
+    :e?.name==="SecurityError"?"O navegador bloqueou o acesso. Abra o app pelo endereço HTTPS e permita a câmera."
+    :`${e?.message||"O navegador não informou o motivo."} (etapa: ${stage})`;
+   setError(detail);setCameraState("error");
+   streamRef.current?.getTracks().forEach(t=>t.stop());streamRef.current=null;
+   if(videoRef.current)videoRef.current.srcObject=null;
+   landmarkerRef.current?.close?.();landmarkerRef.current=null;
+  }
  };
  return <div style={{padding:"18px 14px 90px",maxWidth:800,margin:"0 auto",color:"#f3f5f8"}}>
   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:12}}><button onClick={()=>{stop();onBack();}} style={btn}>← Voltar</button><span style={{fontSize:11,color:"#f59e0b",fontWeight:800,letterSpacing:1}}>ANÁLISE DE MOVIMENTO</span></div>
