@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
-const VISION_WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm";
+const VISION_WASM_CDNS = [
+ "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm",
+ "https://unpkg.com/@mediapipe/tasks-vision@0.10.22/wasm"
+];
 const POSE_MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
 const JOINTS = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[27,31],[24,26],[26,28],[28,32]];
 const ANGLE_TRIPLETS = [
@@ -65,8 +68,13 @@ export default function BiomechanicsCamera({onBack=()=>{}}){
    await video.play();
    stage="carregamento da biblioteca de análise";
    const vision=await import("@mediapipe/tasks-vision");
-   stage="download dos arquivos de suporte";
-   const fileset=await vision.FilesetResolver.forVisionTasks(VISION_WASM);
+   stage="download dos arquivos WASM de suporte";
+   let fileset=null,lastWasmError=null;
+   for(const wasmUrl of VISION_WASM_CDNS){
+    try{fileset=await vision.FilesetResolver.forVisionTasks(wasmUrl);break;}
+    catch(wasmError){lastWasmError=wasmError;}
+   }
+   if(!fileset)throw new Error("Não foi possível baixar os arquivos WASM do MediaPipe de nenhum dos servidores disponíveis. "+errorDetail(lastWasmError));
    stage="download do modelo de pose";
    const modelResponse=await fetch(POSE_MODEL,{mode:"cors",cache:"force-cache"});
    if(!modelResponse.ok)throw new Error("O servidor do modelo respondeu HTTP "+modelResponse.status+".");
