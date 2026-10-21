@@ -288,7 +288,7 @@ function readDashboardMetrics() {
   const results = logs.filter(l => l.result5k && parse(l.result5k) !== null && (!l.km || Number(l.km) === 5));
   CALENDARIO.flatMap(m => m.provas).filter(p => p.id && times[p.id] && p.dist === "5km").forEach(p => {
     const id = "official_" + p.id;
-    if (!results.some(r => r.id === id)) results.push({id,date:p.data,result5k:times[p.id],km:"5",raceName:p.nome});
+    if (!results.some(r => r.id === id)) results.push({id,date:"2026-"+p.data.split("/")[1]+"-"+p.data.split("/")[0],result5k:times[p.id],km:"5",raceName:p.nome});
   });
   const best = results.reduce((b,r) => !b || parse(r.result5k) < parse(b.result5k) ? r : b, null);
   const latest = results.reduce((b,r) => !b || String(r.date||"").localeCompare(String(b.date||"")) > 0 ? r : b, null);
@@ -299,7 +299,7 @@ function readDashboardMetrics() {
   const today = new Date(); today.setHours(0,0,0,0);
   const candidate = [];
   CALENDARIO.flatMap(m => m.provas).forEach(p => {
-    if (p.tipo === "done") return;
+    if (p.tipo === "done" || (p.id && times[p.id] && p.dist === "5km")) return;
     const [day,month] = p.data.split("/").map(Number);
     let date = new Date(today.getFullYear(), month-1, day);
     if (date < today) date.setFullYear(date.getFullYear()+1);
