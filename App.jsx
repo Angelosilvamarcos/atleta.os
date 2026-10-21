@@ -281,7 +281,7 @@ function readDashboardMetrics() {
   try { times = JSON.parse(localStorage.getItem("rt_race_times") || "{}"); } catch (_) {}
   try { extras = JSON.parse(localStorage.getItem("rt_extra_provas") || "[]"); } catch (_) {}
   const parse = (v) => {
-    if (!v || !/^\\d{1,2}:\\d{2}$/.test(String(v).trim())) return null;
+    if (!v || !/^\d{1,2}:\d{2}$/.test(String(v).trim())) return null;
     const [m,sec] = String(v).split(":").map(Number);
     return sec < 60 ? m * 60 + sec : null;
   };
@@ -1357,7 +1357,7 @@ function ModuloProvas({ onBack }) {
     const nt = { ...tempos, [id]: val };
     setTempos(nt);
     store.set("race_times", JSON.stringify(nt));
-    const validTime = /^\\d{1,2}:\\d{2}$/.test(String(val).trim()) && Number(String(val).split(":")[1]) < 60;
+    const validTime = /^\d{1,2}:\d{2}$/.test(String(val).trim()) && Number(String(val).split(":")[1]) < 60;
     if (!validTime) return;
     const fixedRace = CALENDARIO.flatMap(m => m.provas).find(p => p.id === id);
     const customRace = extraProvas.find(p => p.id === id);
