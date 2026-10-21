@@ -275,55 +275,72 @@ const MENU_ITEMS = [
   { id: "biomecanica", icon: "📹", label: "Biomecânica", sub: "Câmera & análise de movimento", color: C.accent },
 ];
 
+function readDashboardMetrics() {
+  let logs = [], times = {}, extras = [];
+  try { logs = JSON.parse(localStorage.getItem("rt_runtarget_v3") || localStorage.getItem("rt_logs") || "[]"); } catch (_) {}
+  try { times = JSON.parse(localStorage.getItem("rt_race_times") || "{}"); } catch (_) {}
+  try { extras = JSON.parse(localStorage.getItem("rt_extra_provas") || "[]"); } catch (_) {}
+  const parse = (v) => {
+    if (!v || !/^\\d{1,2}:\\d{2}$/.test(String(v).trim())) return null;
+    const [m,sec] = String(v).split(":").map(Number);
+    return sec < 60 ? m * 60 + sec : null;
+  };
+  const results = logs.filter(l => l.result5k && parse(l.result5k) !== null && (!l.km || Number(l.km) === 5));
+  CALENDARIO.flatMap(m => m.provas).filter(p => p.id && times[p.id] && p.dist === "5km").forEach(p => {
+    const id = "official_" + p.id;
+    if (!results.some(r => r.id === id)) results.push({id,date:p.data,result5k:times[p.id],km:"5",raceName:p.nome});
+  });
+  const best = results.reduce((b,r) => !b || parse(r.result5k) < parse(b.result5k) ? r : b, null);
+  const latest = results.reduce((b,r) => !b || String(r.date||"").localeCompare(String(b.date||"")) > 0 ? r : b, null);
+  const bestSeconds = best ? parse(best.result5k) : START_BEST;
+  const latestSeconds = latest ? parse(latest.result5k) : bestSeconds;
+  const paceSeconds = Math.round(latestSeconds / 5);
+  const pace = Math.floor(paceSeconds / 60) + "'" + String(paceSeconds % 60).padStart(2,"0") + '"';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const candidate = [];
+  CALENDARIO.flatMap(m => m.provas).forEach(p => {
+    if (p.tipo === "done") return;
+    const [day,month] = p.data.split("/").map(Number);
+    let date = new Date(today.getFullYear(), month-1, day);
+    if (date < today) date.setFullYear(date.getFullYear()+1);
+    candidate.push({date,name:p.nome});
+  });
+  extras.forEach(p => {
+    if (!p.data) return;
+    const date = new Date(p.data + "T00:00:00");
+    if (!Number.isNaN(date.getTime()) && date >= today) candidate.push({date,name:p.nome});
+  });
+  candidate.sort((a,b)=>a.date-b.date);
+  const next = candidate[0] || null;
+  return {bestTime:fmtTime(bestSeconds),latestTime:fmtTime(latestSeconds),pace,daysLeft:next?Math.max(0,Math.ceil((next.date-today)/86400000)):null,nextRace:next?String(next.date.getDate()).padStart(2,"0")+"/"+String(next.date.getMonth()+1).padStart(2,"0"):"Não definida",nextName:next?.name||""};
+}
+
 function HomeMenu({ onSelect }) {
   const now = new Date();
   const dateStr = now.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" }).toUpperCase();
-  const nextRace = new Date("2026-05-17");
-  const daysLeft = Math.max(0, Math.ceil((nextRace - now) / (1000 * 60 * 60 * 24)));
-
+  const [metrics,setMetrics] = useState(() => readDashboardMetrics());
+  useEffect(() => { const refresh=()=>setMetrics(readDashboardMetrics()); window.addEventListener("focus",refresh); return ()=>window.removeEventListener("focus",refresh); }, []);
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "system-ui,-apple-system,sans-serif", padding: "0 0 40px" }}>
-      {/* Hero */}
-      <div style={{ padding: "28px 16px 20px", borderBottom: "1px solid " + C.border, marginBottom: 20 }}>
-        <div style={{ fontSize: 10, color: C.muted, letterSpacing: 3, textTransform: "uppercase", fontFamily: "monospace", marginBottom: 6 }}>{dateStr}</div>
-        <div style={{ fontWeight: 900, fontSize: 28, lineHeight: 1.1, marginBottom: 8 }}>
-          <span style={{ color: C.accent }}>RUN</span><span style={{ color: C.text }}>TARGET</span>
-        </div>
-        <div style={{ fontSize: 13, color: C.text2, lineHeight: 1.6 }}>
-          Seu painel completo de performance.<br/>
-          <span style={{ color: C.green, fontWeight: 700 }}>Meta: 15:10–15:30</span> · Próxima prova: <span style={{ color: C.accent }}>17/05</span>
-        </div>
+    <div style={{ minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"system-ui,-apple-system,sans-serif",padding:"0 0 40px" }}>
+      <div style={{padding:"28px 16px 20px",borderBottom:"1px solid "+C.border,marginBottom:20}}>
+        <div style={{fontSize:10,color:C.muted,letterSpacing:3,textTransform:"uppercase",fontFamily:"monospace",marginBottom:6}}>{dateStr}</div>
+        <div style={{fontWeight:900,fontSize:28,lineHeight:1.1,marginBottom:8}}><span style={{color:C.accent}}>RUN</span><span style={{color:C.text}}>TARGET</span></div>
+        <div style={{fontSize:13,color:C.text2,lineHeight:1.6}}>Seu painel completo de performance.<br/><span style={{color:C.green,fontWeight:700}}>Meta: 15:10–15:30</span> · Próxima prova: <span style={{color:C.accent}}>{metrics.nextRace}</span>{metrics.nextName&&<div style={{fontSize:11,color:C.muted,marginTop:3}}>{metrics.nextName}</div>}</div>
       </div>
-
-      {/* Quick Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, padding: "0 16px", marginBottom: 20 }}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,padding:"0 16px",marginBottom:8}}>
         {[
-          { label: "Melhor 5km", val: "16:43", col: C.accent },
-          { label: "Pace médio", val: "3'25\"", col: C.blue },
-          { label: "Dias p/ prova", val: String(daysLeft), col: C.green },
-        ].map(s => (
-          <div key={s.label} style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
-            <div style={{ fontSize: 18, fontWeight: 900, color: s.col, fontFamily: "monospace" }}>{s.val}</div>
-            <div style={{ fontSize: 9, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginTop: 2 }}>{s.label}</div>
-          </div>
-        ))}
+          {label:"Último 5km",val:metrics.latestTime,col:C.accent},
+          {label:"Pace último 5km",val:metrics.pace,col:C.blue},
+          {label:"Dias p/ prova",val:metrics.daysLeft===null?"—":String(metrics.daysLeft),col:C.green},
+        ].map(s=><div key={s.label} style={{background:C.card,border:"1px solid "+C.border,borderRadius:10,padding:"10px 8px",textAlign:"center"}}><div style={{fontSize:18,fontWeight:900,color:s.col,fontFamily:"monospace"}}>{s.val}</div><div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginTop:2}}>{s.label}</div></div>)}
       </div>
-
-      {/* Menu Grid */}
-      <div style={{ padding: "0 16px" }}>
-        <div style={{ fontSize: 10, color: C.muted, letterSpacing: 2, textTransform: "uppercase", fontFamily: "monospace", marginBottom: 12 }}>MÓDULOS</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          {MENU_ITEMS.map((item, i) => (
-            <button key={item.id} onClick={() => onSelect(item.id)}
-              style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 14, padding: "18px 14px", cursor: "pointer", textAlign: "left", transition: "all .2s", animation: `fadeUp .4s ease ${i * 0.06}s both` }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = item.color; e.currentTarget.style.transform = "translateY(-2px)"; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.transform = "translateY(0)"; }}>
-              <div style={{ fontSize: 28, marginBottom: 8, lineHeight: 1 }}>{item.icon}</div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: C.text, marginBottom: 3 }}>{item.label}</div>
-              <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{item.sub}</div>
-              <div style={{ width: 24, height: 2, background: item.color, borderRadius: 2, marginTop: 10 }}></div>
-            </button>
-          ))}
+      <div style={{padding:"0 16px",marginBottom:20,fontSize:10,color:C.muted,textAlign:"right"}}>Melhor marca registrada: <b style={{color:C.accent}}>{metrics.bestTime}</b></div>
+      <div style={{padding:"0 16px"}}>
+        <div style={{fontSize:10,color:C.muted,letterSpacing:2,textTransform:"uppercase",fontFamily:"monospace",marginBottom:12}}>MÓDULOS</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          {MENU_ITEMS.map((item,i)=><button key={item.id} onClick={()=>onSelect(item.id)} style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,padding:"18px 14px",cursor:"pointer",textAlign:"left",transition:"all .2s",animation:`fadeUp .4s ease ${i*.06}s both`}} onMouseEnter={e=>{e.currentTarget.style.borderColor=item.color;e.currentTarget.style.transform="translateY(-2px)"}} onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.transform="translateY(0)"}}>
+            <div style={{fontSize:28,marginBottom:8,lineHeight:1}}>{item.icon}</div><div style={{fontWeight:700,fontSize:14,color:C.text,marginBottom:3}}>{item.label}</div><div style={{fontSize:11,color:C.muted,lineHeight:1.4}}>{item.sub}</div><div style={{width:24,height:2,background:item.color,borderRadius:2,marginTop:10}}/>
+          </button>)}
         </div>
       </div>
       <style>{`@keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }`}</style>
@@ -1340,6 +1357,21 @@ function ModuloProvas({ onBack }) {
     const nt = { ...tempos, [id]: val };
     setTempos(nt);
     store.set("race_times", JSON.stringify(nt));
+    const validTime = /^\\d{1,2}:\\d{2}$/.test(String(val).trim()) && Number(String(val).split(":")[1]) < 60;
+    if (!validTime) return;
+    const fixedRace = CALENDARIO.flatMap(m => m.provas).find(p => p.id === id);
+    const customRace = extraProvas.find(p => p.id === id);
+    const race = fixedRace || customRace;
+    if (!race || race.dist !== "5km") return;
+    let date = "";
+    if (customRace) date = customRace.data;
+    else { const [day,month] = race.data.split("/").map(Number); date = new Date(new Date().getFullYear(),month-1,day).toISOString().slice(0,10); }
+    const result = {id:"official_"+id,raceId:id,raceName:race.nome,date,type:"Prova 5km",desc:race.nome,intensity:"forte",fromCoach:false,result5k:String(val).trim(),notes:"Resultado oficial registrado no calendário de provas",rpe:8,sono:"bom",pernas:"normal",km:"5"};
+    store.get("runtarget_v3").then(r => {
+      let logs=[]; try { logs=r?.value?JSON.parse(r.value):INITIAL_LOGS.slice(); } catch (_) { logs=INITIAL_LOGS.slice(); }
+      const updated=[...logs.filter(l=>l.id!==result.id&&l.raceId!==id),result].sort((x,y)=>String(x.date).localeCompare(String(y.date)));
+      return store.set("runtarget_v3",JSON.stringify(updated)).then(()=>{try{localStorage.setItem("rt_logs",JSON.stringify(updated));}catch(_){}});
+    }).catch(()=>{});
   }
 
   function addProva() {
@@ -1866,34 +1898,21 @@ function AuthInput({label, ...props}) {
 }
 
 function LoginScreen({onLogin, onCreate}) {
-  const [email,setEmail]=useState("");
-  const [password,setPassword]=useState("");
-  const [error,setError]=useState("");
+  const [name,setName]=useState(""); const [pin,setPin]=useState(""); const [error,setError]=useState("");
   const profile=(()=>{try{return JSON.parse(localStorage.getItem("atletaos_profile")||"null")}catch{return null}})();
   const saved=(()=>{try{return JSON.parse(localStorage.getItem("atletaos_auth")||"null")}catch{return null}})();
   function submit(){
-    if(!email.trim()||!password){setError("Preencha e-mail e senha.");return;}
-    if(saved && (email.trim().toLowerCase()!==saved.email || password!==saved.password)){
-      setError("E-mail ou senha incorretos."); return;
-    }
-    if(!saved){setError("Primeiro acesso: crie sua conta.");return;}
-    localStorage.setItem("atletaos_last_login",new Date().toISOString());
-    onLogin();
+    const expectedName=String(profile?.nome||saved?.name||"Angelo").trim().toLowerCase();
+    const expectedPin=String(profile?.pin||saved?.pin||"1234");
+    if(!name.trim()||!pin.trim()){setError("Informe seu nome e PIN.");return;}
+    if(name.trim().toLowerCase()!==expectedName||pin!==expectedPin){setError("Nome ou PIN incorretos.");return;}
+    localStorage.setItem("atletaos_last_login",new Date().toISOString()); onLogin();
   }
   return <div style={{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"system-ui,-apple-system,sans-serif",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-    <div style={{width:"100%",maxWidth:400}}>
-      <div style={{textAlign:"center",marginBottom:28}}>
-        <div style={{fontSize:11,color:C.accent,letterSpacing:3,fontFamily:"monospace",marginBottom:8}}>PERFORMANCE PLATFORM</div>
-        <div style={{fontSize:36,fontWeight:900}}><span style={{color:C.accent}}>ATLETA</span>OS</div>
-        <div style={{fontSize:13,color:C.muted,marginTop:8}}>Treino, performance e evolução em um só lugar.</div>
-      </div>
-      <div style={baseCard}>
-        <AuthInput label="E-mail" type="email" value={email} onChange={e=>{setEmail(e.target.value);setError("")}} placeholder="seu@email.com" autoComplete="email"/>
-        <AuthInput label="Senha" type="password" value={password} onChange={e=>{setPassword(e.target.value);setError("")}} placeholder="••••••••" autoComplete="current-password" onKeyDown={e=>e.key==="Enter"&&submit()}/>
-        {error&&<div style={{fontSize:12,color:C.red,marginBottom:12}}>{error}</div>}
-        <button onClick={submit} style={{...pbtn(C.accent,"#000"),width:"100%"}}>ENTRAR</button>
-        {saved&&profile&&<button onClick={()=>{localStorage.setItem("atletaos_last_login",new Date().toISOString());onLogin()}} style={{...pbtn(C.green,"#000"),width:"100%",marginTop:8}}>ENTRAR COMO {String(profile.nome||"ATLETA").toUpperCase()}</button>}
-        <button onClick={onCreate} style={{width:"100%",marginTop:14,padding:10,background:"transparent",border:"none",color:C.accent,cursor:"pointer",fontSize:12,fontWeight:700}}>CRIAR NOVA CONTA</button>
+    <div style={{width:"100%",maxWidth:400}}><div style={{textAlign:"center",marginBottom:28}}><div style={{fontSize:11,color:C.accent,letterSpacing:3,fontFamily:"monospace",marginBottom:8}}>ACESSO PESSOAL LOCAL</div><div style={{fontSize:36,fontWeight:900}}><span style={{color:C.accent}}>ATLETA</span>OS</div><div style={{fontSize:13,color:C.muted,marginTop:8}}>Acesso simples neste dispositivo, sem e-mail.</div></div>
+      <div style={baseCard}><AuthInput label="Nome" value={name} onChange={e=>{setName(e.target.value);setError("")}} placeholder={profile?.nome||"Angelo"} autoComplete="username"/><AuthInput label="PIN" type="password" inputMode="numeric" value={pin} onChange={e=>{setPin(e.target.value.replace(/[^0-9]/g,"").slice(0,8));setError("")}} placeholder="1234" autoComplete="current-password" onKeyDown={e=>e.key==="Enter"&&submit()}/>
+        {error&&<div style={{fontSize:12,color:C.red,marginBottom:12}}>{error}</div>}<button onClick={submit} style={{...pbtn(C.accent,"#000"),width:"100%"}}>ENTRAR</button>{!profile&&<button onClick={onCreate} style={{width:"100%",marginTop:14,padding:10,background:"transparent",border:"none",color:C.accent,cursor:"pointer",fontSize:12,fontWeight:700}}>CONFIGURAR PERFIL</button>}
+        <div style={{fontSize:10,color:C.muted,lineHeight:1.5,marginTop:12}}>PIN local para uso pessoal neste aparelho; não é autenticação segura para vários usuários.</div>
       </div>
     </div>
   </div>;
@@ -1901,13 +1920,13 @@ function LoginScreen({onLogin, onCreate}) {
 
 function OnboardingScreen({onComplete}) {
   const [step,setStep]=useState(0);
-  const [data,setData]=useState({nome:"",email:"",password:"",foco:"5km",melhor5k:"",melhor10k:"",melhor21k:"",diasTreino:[],fazAcademia:false,fazCore:false});
+  const [data,setData]=useState({nome:"",pin:"1234",foco:"5km",melhor5k:"",melhor10k:"",melhor21k:"",diasTreino:[],fazAcademia:false,fazCore:false});
   const DIAS=["Seg","Ter","Qua","Qui","Sex","Sab","Dom"];
   const pct=Math.round(((step+1)/5)*100);
   function finish(){
     const profile={...data,createdAt:new Date().toISOString()};
     localStorage.setItem("atletaos_profile",JSON.stringify(profile));
-    localStorage.setItem("atletaos_auth",JSON.stringify({email:data.email.trim().toLowerCase(),password:data.password}));
+    localStorage.setItem("atletaos_auth",JSON.stringify({name:data.nome.trim(),pin:String(data.pin||"1234")}));
     localStorage.setItem("atletaos_last_login",new Date().toISOString());
     if(data.melhor5k){
       let logs=[]; try{logs=JSON.parse(localStorage.getItem("rt_logs")||"[]")}catch{}
@@ -1946,7 +1965,7 @@ function OnboardingScreen({onComplete}) {
       </div>}
       {step===4&&<div style={{textAlign:"center",paddingTop:40}}><div style={{fontSize:56}}>🏆</div><div style={{fontSize:28,fontWeight:900,margin:"16px 0 8px"}}>Tudo pronto, {data.nome||"atleta"}!</div><div style={{fontSize:14,color:C.muted,lineHeight:1.6}}>Seu perfil está configurado. O próximo passo é acompanhar treino, carga e performance.</div></div>}
     </div>
-    {step<4&&<div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:600,padding:"12px 20px 24px",background:"rgba(10,10,10,.97)",borderTop:"1px solid "+C.border,display:"flex",gap:10,zIndex:100}}>{step>0&&<button onClick={()=>setStep(s=>s-1)} style={{...pbtn(C.border,C.muted),flex:"0 0 80px"}}>Voltar</button>}<button onClick={()=>{if(step===0&&(!data.nome.trim()||!data.email.trim()||!data.password))return;setStep(s=>s+1)}} style={{...pbtn(C.accent,"#000"),flex:1}}>{step===3?"Ver resumo":"Continuar"}</button></div>}
+    {step<4&&<div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:600,padding:"12px 20px 24px",background:"rgba(10,10,10,.97)",borderTop:"1px solid "+C.border,display:"flex",gap:10,zIndex:100}}>{step>0&&<button onClick={()=>setStep(s=>s-1)} style={{...pbtn(C.border,C.muted),flex:"0 0 80px"}}>Voltar</button>}<button onClick={()=>{if(step===0&&(!data.nome.trim()||!data.pin.trim()))return;setStep(s=>s+1)}} style={{...pbtn(C.accent,"#000"),flex:1}}>{step===3?"Ver resumo":"Continuar"}</button></div>}
     {step===4&&<div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:600,padding:"12px 20px 24px",background:"rgba(10,10,10,.97)",borderTop:"1px solid "+C.border}}><button onClick={finish} style={{...pbtn(C.accent,"#000"),width:"100%"}}>COMEÇAR AGORA</button></div>}
   </div>;
 }
@@ -1955,10 +1974,7 @@ function OnboardingScreen({onComplete}) {
 export default function App() {
   const [authState,setAuthState]=useState(()=>{
     const profile=(()=>{try{return JSON.parse(localStorage.getItem("atletaos_profile")||"null")}catch{return null}})();
-    const last=localStorage.getItem("atletaos_last_login");
-    if(!profile)return "onboarding";
-    if(last&&(new Date()-new Date(last))/3600000<24)return "app";
-    return "login";
+    return profile ? "app" : "onboarding";
   });
   const [screen,setScreen]=useState("home");
   const [logs,setLogs]=useState(()=>{try{return JSON.parse(localStorage.getItem("rt_logs")||"null")||INITIAL_LOGS}catch{return INITIAL_LOGS}});
