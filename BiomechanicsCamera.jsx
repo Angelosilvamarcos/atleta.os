@@ -15,9 +15,15 @@ function angle(a,b,c){
  if(!mag)return null;
  return Math.round(Math.acos(Math.max(-1,Math.min(1,(v1[0]*(c.x-b.x)+v1[1]*(c.y-b.y))/mag)))*180/Math.PI);
 }
+function errorDetail(e){
+ if(e?.message)return e.message;
+ if(e?.type==="error"||e instanceof Event)return "O navegador reportou uma falha ao carregar um recurso externo (arquivo WASM ou modelo). Verifique a conexão e se o navegador não bloqueou o download.";
+ if(typeof e==="string")return e;
+ try{return JSON.stringify(e);}catch{return String(e??"erro sem detalhes");}
+}
 function explainCameraError(e,stage){
  const name=e?.name||"";
- const detail=typeof e==="string"?e:(e?.message||String(e??"erro sem detalhes"));
+ const detail=errorDetail(e);
  if(name==="NotAllowedError"||name==="PermissionDeniedError") return "O navegador recusou o acesso à câmera. Como a permissão aparece como permitida, confirme que ela está liberada para este endereço exato e recarregue a página. Etapa: "+stage+".";
  if(name==="NotFoundError"||name==="DevicesNotFoundError") return "Nenhuma câmera foi encontrada neste dispositivo. Etapa: "+stage+".";
  if(name==="NotReadableError"||name==="TrackStartError") return "O Android não conseguiu abrir a câmera. Feche o app Câmera e outros aplicativos que possam estar usando-a e tente novamente. Etapa: "+stage+".";
@@ -59,12 +65,17 @@ export default function BiomechanicsCamera({onBack=()=>{}}){
    await video.play();
    stage="carregamento da biblioteca de análise";
    const vision=await import("@mediapipe/tasks-vision");
-   stage="download dos arquivos de suporte e do modelo";
+   stage="download dos arquivos de suporte";
    const fileset=await vision.FilesetResolver.forVisionTasks(VISION_WASM);
-   const options={baseOptions:{modelAssetPath:POSE_MODEL,delegate:"GPU"},runningMode:"VIDEO",numPoses:1,minPoseDetectionConfidence:.5,minPosePresenceConfidence:.5,minTrackingConfidence:.5};
+   stage="download do modelo de pose";
+   const modelResponse=await fetch(POSE_MODEL,{mode:"cors",cache:"force-cache"});
+   if(!modelResponse.ok)throw new Error("O servidor do modelo respondeu HTTP "+modelResponse.status+".");
+   const modelAssetBuffer=new Uint8Array(await modelResponse.arrayBuffer());
+   if(!modelAssetBuffer.length)throw new Error("O arquivo do modelo chegou vazio.");
+   const options={baseOptions:{modelAssetBuffer,delegate:"GPU"},runningMode:"VIDEO",numPoses:1,minPoseDetectionConfidence:.5,minPosePresenceConfidence:.5,minTrackingConfidence:.5};
    stage="inicialização do modelo de pose";
    try{landmarker=await vision.PoseLandmarker.createFromOptions(fileset,options);}
-   catch(gpuError){stage="inicialização do modelo em modo compatível (CPU)";landmarker=await vision.PoseLandmarker.createFromOptions(fileset,{...options,baseOptions:{modelAssetPath:POSE_MODEL,delegate:"CPU"}});}
+   catch(gpuError){stage="inicialização do modelo em modo compatível (CPU)";landmarker=await vision.PoseLandmarker.createFromOptions(fileset,{...options,baseOptions:{modelAssetBuffer,delegate:"CPU"}});}
    landmarkerRef.current=landmarker;
    lastVideoTime.current=-1;setCameraState("active");
    const draw=()=>{
