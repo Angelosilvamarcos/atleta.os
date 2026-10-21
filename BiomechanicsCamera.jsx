@@ -15,15 +15,16 @@ function angle(a,b,c){
  if(!mag)return null;
  return Math.round(Math.acos(Math.max(-1,Math.min(1,(v1[0]*(c.x-b.x)+v1[1]*(c.y-b.y))/mag)))*180/Math.PI);
 }
-function explainCameraError(e){
+function explainCameraError(e,stage){
  const name=e?.name||"";
- if(name==="NotAllowedError"||name==="PermissionDeniedError") return "Permissão negada. No Chrome, toque no ícone ao lado do endereço → Permissões → Câmera → Permitir. Depois recarregue a página.";
- if(name==="NotFoundError"||name==="DevicesNotFoundError") return "Nenhuma câmera foi encontrada neste dispositivo.";
- if(name==="NotReadableError"||name==="TrackStartError") return "A câmera está ocupada por outro aplicativo. Feche outros apps que usam a câmera e tente novamente.";
- if(name==="OverconstrainedError"||name==="ConstraintNotSatisfiedError") return "A câmera não aceitou a resolução solicitada. Tente novamente; o app usará uma configuração mais simples.";
- if(name==="SecurityError"||!window.isSecureContext) return "O navegador bloqueou a câmera. Abra o endereço HTTPS no Chrome e não dentro de uma janela incorporada.";
- if(/fetch|network|wasm|model|gpu|delegate|mediapipe/i.test(e?.message||"")) return "A câmera abriu, mas o modelo de análise não carregou. Verifique a internet e tente novamente; o app tentará um modo compatível com este aparelho.";
- return "Não foi possível iniciar a câmera ("+(name||"erro não identificado")+(e?.message?": "+e.message:"")+"). Verifique a permissão e tente novamente.";
+ const detail=typeof e==="string"?e:(e?.message||String(e??"erro sem detalhes"));
+ if(name==="NotAllowedError"||name==="PermissionDeniedError") return "O navegador recusou o acesso à câmera. Como a permissão aparece como permitida, confirme que ela está liberada para este endereço exato e recarregue a página. Etapa: "+stage+".";
+ if(name==="NotFoundError"||name==="DevicesNotFoundError") return "Nenhuma câmera foi encontrada neste dispositivo. Etapa: "+stage+".";
+ if(name==="NotReadableError"||name==="TrackStartError") return "O Android não conseguiu abrir a câmera. Feche o app Câmera e outros aplicativos que possam estar usando-a e tente novamente. Etapa: "+stage+".";
+ if(name==="OverconstrainedError"||name==="ConstraintNotSatisfiedError") return "A câmera não aceitou a configuração solicitada. Tente novamente. Etapa: "+stage+".";
+ if(name==="SecurityError"||!window.isSecureContext) return "O navegador bloqueou a câmera por segurança. Abra o site HTTPS diretamente no Chrome. Etapa: "+stage+".";
+ if(/fetch|network|wasm|model|gpu|delegate|mediapipe|failed to fetch/i.test(detail)) return "A câmera pode ter aberto, mas o modelo de análise não carregou. Confira a conexão e tente novamente. Etapa: "+stage+". Detalhe: "+detail;
+ return "Falha na etapa "+stage+". "+detail;
 }
 const btn={background:"#202632",color:"#f4f6fa",border:"1px solid #3a4250",borderRadius:10,padding:"10px 14px",fontWeight:700,cursor:"pointer"};
 export default function BiomechanicsCamera({onBack=()=>{}}){
@@ -40,25 +41,30 @@ export default function BiomechanicsCamera({onBack=()=>{}}){
  const start=async()=>{
   if(cameraState==="starting")return;
   setError("");setCameraState("starting");setPoseVisible(false);setAngles([]);
-  let stream=null,landmarker=null;
+  let stream=null,landmarker=null,stage="verificação de segurança";
   try{
    if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia) throw new Error("Câmera indisponível: abra o site em HTTPS no Chrome.");
+   stage="solicitação de acesso à câmera";
    try{
     stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}},audio:false});
    }catch(firstError){
     if(["NotAllowedError","PermissionDeniedError","NotFoundError","NotReadableError","SecurityError"].includes(firstError?.name))throw firstError;
     stream=await navigator.mediaDevices.getUserMedia({video:true,audio:false});
    }
+   stage="ativação do vídeo";
    streamRef.current=stream;
    const video=videoRef.current;
    if(!video)throw new Error("A área de vídeo não está disponível. Recarregue a página.");
    video.srcObject=stream;
    await video.play();
+   stage="carregamento da biblioteca de análise";
    const vision=await import("@mediapipe/tasks-vision");
+   stage="download dos arquivos de suporte e do modelo";
    const fileset=await vision.FilesetResolver.forVisionTasks(VISION_WASM);
    const options={baseOptions:{modelAssetPath:POSE_MODEL,delegate:"GPU"},runningMode:"VIDEO",numPoses:1,minPoseDetectionConfidence:.5,minPosePresenceConfidence:.5,minTrackingConfidence:.5};
+   stage="inicialização do modelo de pose";
    try{landmarker=await vision.PoseLandmarker.createFromOptions(fileset,options);}
-   catch(gpuError){landmarker=await vision.PoseLandmarker.createFromOptions(fileset,{...options,baseOptions:{modelAssetPath:POSE_MODEL,delegate:"CPU"}});}
+   catch(gpuError){stage="inicialização do modelo em modo compatível (CPU)";landmarker=await vision.PoseLandmarker.createFromOptions(fileset,{...options,baseOptions:{modelAssetPath:POSE_MODEL,delegate:"CPU"}});}
    landmarkerRef.current=landmarker;
    lastVideoTime.current=-1;setCameraState("active");
    const draw=()=>{
@@ -85,7 +91,7 @@ export default function BiomechanicsCamera({onBack=()=>{}}){
    landmarker?.close?.();landmarkerRef.current=null;
    stream?.getTracks().forEach(t=>t.stop());streamRef.current=null;
    if(videoRef.current){videoRef.current.srcObject=null;}
-   setError(explainCameraError(e));setCameraState("error");
+   setError(explainCameraError(e,stage));setCameraState("error");
   }
  };
  return <div style={{padding:"18px 14px 90px",maxWidth:800,margin:"0 auto",color:"#f3f5f8"}}>
