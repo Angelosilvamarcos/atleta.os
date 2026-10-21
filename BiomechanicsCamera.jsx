@@ -11,46 +11,68 @@ const ANGLE_TRIPLETS = [
 ];
 function angle(a,b,c){
  const v1=[a.x-b.x,a.y-b.y],v2=[c.x-b.x,c.y-b.y];
- const dot=v1[0]*v2[0]+v1[1]*v2[1];
  const mag=Math.hypot(...v1)*Math.hypot(...v2);
  if(!mag)return null;
- return Math.round(Math.acos(Math.max(-1,Math.min(1,dot/mag)))*180/Math.PI);
+ return Math.round(Math.acos(Math.max(-1,Math.min(1,(v1[0]*(c.x-b.x)+v1[1]*(c.y-b.y))/mag)))*180/Math.PI);
+}
+function explainCameraError(e){
+ const name=e?.name||"";
+ if(name==="NotAllowedError"||name==="PermissionDeniedError") return "Permissão negada. No Chrome, toque no ícone ao lado do endereço → Permissões → Câmera → Permitir. Depois recarregue a página.";
+ if(name==="NotFoundError"||name==="DevicesNotFoundError") return "Nenhuma câmera foi encontrada neste dispositivo.";
+ if(name==="NotReadableError"||name==="TrackStartError") return "A câmera está ocupada por outro aplicativo. Feche outros apps que usam a câmera e tente novamente.";
+ if(name==="OverconstrainedError"||name==="ConstraintNotSatisfiedError") return "A câmera não aceitou a resolução solicitada. Tente novamente; o app usará uma configuração mais simples.";
+ if(name==="SecurityError"||!window.isSecureContext) return "O navegador bloqueou a câmera. Abra o endereço HTTPS no Chrome e não dentro de uma janela incorporada.";
+ if(/fetch|network|wasm|model|gpu|delegate|mediapipe/i.test(e?.message||"")) return "A câmera abriu, mas o modelo de análise não carregou. Verifique a internet e tente novamente; o app tentará um modo compatível com este aparelho.";
+ return "Não foi possível iniciar a câmera ("+(name||"erro não identificado")+(e?.message?": "+e.message:"")+"). Verifique a permissão e tente novamente.";
 }
 const btn={background:"#202632",color:"#f4f6fa",border:"1px solid #3a4250",borderRadius:10,padding:"10px 14px",fontWeight:700,cursor:"pointer"};
 export default function BiomechanicsCamera({onBack=()=>{}}){
  const videoRef=useRef(null),canvasRef=useRef(null),streamRef=useRef(null),landmarkerRef=useRef(null),rafRef=useRef(null),lastVideoTime=useRef(-1);
  const [cameraState,setCameraState]=useState("idle"),[error,setError]=useState(""),[angles,setAngles]=useState([]),[poseVisible,setPoseVisible]=useState(false),[mode,setMode]=useState("lateral"),[frames,setFrames]=useState(0);
  const stop=()=>{
-   if(rafRef.current)cancelAnimationFrame(rafRef.current);rafRef.current=null;
-   if(streamRef.current){streamRef.current.getTracks().forEach(t=>t.stop());streamRef.current=null;}
-   if(videoRef.current)videoRef.current.srcObject=null;
-   landmarkerRef.current?.close?.();landmarkerRef.current=null;
-   setCameraState("idle");setPoseVisible(false);
+  if(rafRef.current)cancelAnimationFrame(rafRef.current);rafRef.current=null;
+  if(streamRef.current){streamRef.current.getTracks().forEach(t=>t.stop());streamRef.current=null;}
+  if(videoRef.current){videoRef.current.pause?.();videoRef.current.srcObject=null;}
+  landmarkerRef.current?.close?.();landmarkerRef.current=null;
+  setCameraState("idle");setPoseVisible(false);setAngles([]);
  };
  useEffect(()=>()=>{if(rafRef.current)cancelAnimationFrame(rafRef.current);streamRef.current?.getTracks().forEach(t=>t.stop());landmarkerRef.current?.close?.();},[]);
  const start=async()=>{
-  setError("");setCameraState("starting");
+  if(cameraState==="starting")return;
+  setError("");setCameraState("starting");setPoseVisible(false);setAngles([]);
+  let stream=null,landmarker=null;
   try{
-   if(!navigator.mediaDevices?.getUserMedia)throw new Error("Câmera indisponível. Abra o app em HTTPS e use um navegador compatível.");
-   const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment",width:{ideal:1280},height:{ideal:720}},audio:false});
+   if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia) throw new Error("Câmera indisponível: abra o site em HTTPS no Chrome.");
+   try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}},audio:false});
+   }catch(firstError){
+    if(["NotAllowedError","PermissionDeniedError","NotFoundError","NotReadableError","SecurityError"].includes(firstError?.name))throw firstError;
+    stream=await navigator.mediaDevices.getUserMedia({video:true,audio:false});
+   }
    streamRef.current=stream;
-   const video=videoRef.current;video.srcObject=stream;await video.play();
+   const video=videoRef.current;
+   if(!video)throw new Error("A área de vídeo não está disponível. Recarregue a página.");
+   video.srcObject=stream;
+   await video.play();
    const vision=await import("@mediapipe/tasks-vision");
    const fileset=await vision.FilesetResolver.forVisionTasks(VISION_WASM);
-   const landmarker=await vision.PoseLandmarker.createFromOptions(fileset,{baseOptions:{modelAssetPath:POSE_MODEL,delegate:"GPU"},runningMode:"VIDEO",numPoses:1,minPoseDetectionConfidence:.5,minPosePresenceConfidence:.5,minTrackingConfidence:.5});
-   landmarkerRef.current=landmarker;setCameraState("active");
+   const options={baseOptions:{modelAssetPath:POSE_MODEL,delegate:"GPU"},runningMode:"VIDEO",numPoses:1,minPoseDetectionConfidence:.5,minPosePresenceConfidence:.5,minTrackingConfidence:.5};
+   try{landmarker=await vision.PoseLandmarker.createFromOptions(fileset,options);}
+   catch(gpuError){landmarker=await vision.PoseLandmarker.createFromOptions(fileset,{...options,baseOptions:{modelAssetPath:POSE_MODEL,delegate:"CPU"}});}
+   landmarkerRef.current=landmarker;
+   lastVideoTime.current=-1;setCameraState("active");
    const draw=()=>{
-    if(!videoRef.current||!canvasRef.current||!landmarkerRef.current)return;
+    if(!videoRef.current||!canvasRef.current||!landmarkerRef.current){rafRef.current=null;return;}
     const v=videoRef.current,c=canvasRef.current,ctx=c.getContext("2d");
     if(v.readyState>=2&&v.currentTime!==lastVideoTime.current){
-     lastVideoTime.current=v.currentTime;c.width=v.videoWidth||640;c.height=v.videoHeight||480;
+     c.width=v.videoWidth||640;c.height=v.videoHeight||480;
      const result=landmarkerRef.current.detectForVideo(v,performance.now());
      ctx.clearRect(0,0,c.width,c.height);
      const lm=result.landmarks?.[0];
      if(lm){
       setPoseVisible(true);setFrames(x=>x+1);
       ctx.lineWidth=Math.max(2,c.width/240);ctx.strokeStyle="#f59e0b";ctx.fillStyle="#22c55e";
-      for(const [a,b] of JOINTS){if(lm[a]?.visibility>.45&&lm[b]?.visibility>.45){ctx.beginPath();ctx.moveTo(lm[a].x*c.width,lm[a].y*c.height);ctx.lineTo(lm[b].x*c.width,lm[b].y*c.height);ctx.stroke();}}
+      for(const [a,b] of JOINTS){if((lm[a]?.visibility??0)>.45&&(lm[b]?.visibility??0)>.45){ctx.beginPath();ctx.moveTo(lm[a].x*c.width,lm[a].y*c.height);ctx.lineTo(lm[b].x*c.width,lm[b].y*c.height);ctx.stroke();}}
       lm.forEach(p=>{if((p.visibility??0)>.5){ctx.beginPath();ctx.arc(p.x*c.width,p.y*c.height,Math.max(3,c.width/180),0,Math.PI*2);ctx.fill();}});
       setAngles(ANGLE_TRIPLETS.map(t=>({name:t.name,value:[lm[t.a],lm[t.b],lm[t.c]].every(p=>(p.visibility??0)>.5)?angle(lm[t.a],lm[t.b],lm[t.c]):null})));
      }else{setPoseVisible(false);setAngles([]);}
@@ -59,7 +81,12 @@ export default function BiomechanicsCamera({onBack=()=>{}}){
     rafRef.current=requestAnimationFrame(draw);
    };
    rafRef.current=requestAnimationFrame(draw);
-  }catch(e){setError(e?.name==="NotAllowedError"?"Permissão da câmera negada. Autorize a câmera nas configurações do navegador e tente novamente.":(e?.message||"Não foi possível iniciar a câmera."));setCameraState("error");streamRef.current?.getTracks().forEach(t=>t.stop());streamRef.current=null;}
+  }catch(e){
+   landmarker?.close?.();landmarkerRef.current=null;
+   stream?.getTracks().forEach(t=>t.stop());streamRef.current=null;
+   if(videoRef.current){videoRef.current.srcObject=null;}
+   setError(explainCameraError(e));setCameraState("error");
+  }
  };
  return <div style={{padding:"18px 14px 90px",maxWidth:800,margin:"0 auto",color:"#f3f5f8"}}>
   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:12}}><button onClick={()=>{stop();onBack();}} style={btn}>← Voltar</button><span style={{fontSize:11,color:"#f59e0b",fontWeight:800,letterSpacing:1}}>ANÁLISE DE MOVIMENTO</span></div>
@@ -72,9 +99,9 @@ export default function BiomechanicsCamera({onBack=()=>{}}){
    <div style={{position:"relative",width:"100%",aspectRatio:"4/3",background:"#080a0e",borderRadius:10,overflow:"hidden"}}>
     <video ref={videoRef} muted playsInline style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",display:cameraState==="active"?"block":"none"}}/>
     <canvas ref={canvasRef} style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"contain",pointerEvents:"none"}}/>
-    {cameraState!=="active"&&<div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",textAlign:"center",padding:20,color:"#9ca3af"}}> <div><div style={{fontSize:36}}>📷</div><div style={{fontWeight:700,marginTop:8}}>Câmera desligada</div><div style={{fontSize:12,marginTop:5}}>Toque em ativar para conceder permissão</div></div></div>}
+    {cameraState!=="active"&&<div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",textAlign:"center",padding:20,color:"#9ca3af"}}><div><div style={{fontSize:36}}>📷</div><div style={{fontWeight:700,marginTop:8}}>{cameraState==="starting"?"Iniciando câmera…":"Câmera desligada"}</div><div style={{fontSize:12,marginTop:5}}>{cameraState==="starting"?"Solicitando permissão e carregando a análise.":"Toque em ativar para conceder permissão"}</div></div></div>}
    </div>
-   {error&&<p role="alert" style={{color:"#fb7185",fontSize:12}}>{error}</p>}
+   {error&&<p role="alert" style={{color:"#fb7185",fontSize:12,lineHeight:1.5}}>{error}</p>}
    <div style={{display:"flex",gap:8,marginTop:12}}>{cameraState!=="active"?<button onClick={start} disabled={cameraState==="starting"} style={{...btn,flex:1,background:"#f59e0b",color:"#111",opacity:cameraState==="starting"?.7:1}}>{cameraState==="starting"?"Iniciando câmera e modelo…":"Ativar câmera"}</button>:<button onClick={stop} style={{...btn,flex:1,background:"#7f1d1d",borderColor:"#991b1b"}}>Parar câmera</button>}</div>
   </div>
   <div style={{background:"#151922",border:"1px solid #2a303b",borderRadius:14,padding:14,marginBottom:12}}><h2 style={{fontSize:17,marginTop:0}}>Leitura em tempo real</h2>{cameraState!=="active"?<p style={{fontSize:12,color:"#a9b2c1"}}>Ative a câmera para iniciar a detecção da pose.</p>:!poseVisible?<p style={{fontSize:12,color:"#fbbf24"}}>Pose não detectada com confiança suficiente. Afaste-se um pouco, ilumine o ambiente e deixe o corpo inteiro no enquadramento.</p>:<><p style={{fontSize:12,color:"#22c55e"}}>Pose detectada • análise local ativa</p><div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:8}}>{angles.map(a=><div key={a.name} style={{background:"#0c0f14",borderRadius:9,padding:10}}><div style={{fontSize:11,color:"#a9b2c1"}}>{a.name}</div><div style={{fontSize:23,fontWeight:800,color:a.value==null?"#9ca3af":"#f59e0b"}}>{a.value==null?"—":a.value+"°"}</div></div>)}</div><p style={{fontSize:11,color:"#a9b2c1"}}>Os ângulos dependem da perspectiva, oclusão e enquadramento; não interprete valores isolados como “bons” ou “ruins”.</p></>}</div>
