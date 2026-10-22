@@ -266,6 +266,8 @@ function FatigueMeter({ score }) {
 // ── MENU PRINCIPAL ─────────────────────────────────────────────────────────
 const MENU_ITEMS = [
   { id: "corrida",     icon: "🏃", label: "Corrida",      sub: "Performance & Plano",  color: C.accent },
+  { id: "alimentacao", icon: "🥗", label: "Alimentação",  sub: "Nutrição & Refeições", color: C.green },
+  { id: "core",        icon: "💪", label: "Core",         sub: "Exercícios & Sessões", color: C.blue },
   { id: "provas",      icon: "🏆", label: "Provas 2026",  sub: "Calendário & Tempos",  color: C.purple },
   { id: "treino-dia",  icon: "📋", label: "Treino do Dia",sub: "Sequência cronometrada",color: "#06b6d4" },
   { id: "biblioteca", icon: "🧩", label: "Biblioteca 5 km", sub: "Técnica, força & coordenação", color: C.accent },
