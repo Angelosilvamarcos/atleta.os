@@ -337,8 +337,8 @@ function HomeMenu({ onSelect }) {
       <div style={{padding:"0 16px"}}>
         <div style={{fontSize:10,color:C.muted,letterSpacing:2,textTransform:"uppercase",fontFamily:"monospace",marginBottom:12}}>MÓDULOS</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          {MENU_ITEMS.map((item,i)=><button key={item.id} onClick={()=>onSelect(item.id)} style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,padding:"18px 14px",cursor:"pointer",textAlign:"left",transition:"all .2s",animation:`fadeUp .4s ease ${i*.06}s both`}} onMouseEnter={e=>{e.currentTarget.style.borderColor=item.color;e.currentTarget.style.transform="translateY(-2px)"}} onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.transform="translateY(0)"}}>
-            <div style={{fontSize:28,marginBottom:8,lineHeight:1}}>{item.icon}</div><div style={{fontWeight:700,fontSize:14,color:C.text,marginBottom:3}}>{item.label}</div><div style={{fontSize:11,color:C.muted,lineHeight:1.4}}>{item.sub}</div><div style={{width:24,height:2,background:item.color,borderRadius:2,marginTop:10}}/>
+          {MENU_ITEMS.map((item,i)=><button key={item.id} onClick={()=>onSelect(item.id)} style={{background:"linear-gradient(145deg,"+item.color+"22 0%,"+C.card+" 58%)",border:"1px solid "+item.color+"55",borderRadius:18,padding:"18px 14px",cursor:"pointer",textAlign:"left",transition:"all .22s",boxShadow:"0 10px 24px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.035)",animation:`fadeUp .4s ease ${i*.06}s both`}} onMouseEnter={e=>{e.currentTarget.style.borderColor=item.color;e.currentTarget.style.transform="translateY(-2px)"}} onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.transform="translateY(0)"}}>
+            <div style={{display:"inline-grid",placeItems:"center",width:48,height:48,borderRadius:15,background:item.color+"22",border:"1px solid "+item.color+"55",boxShadow:"0 6px 16px "+item.color+"16",fontSize:27,marginBottom:12,lineHeight:1}}>{item.icon}</div><div style={{fontWeight:800,fontSize:15,color:"#f8fafc",marginBottom:4,letterSpacing:-.2}}>{item.label}</div><div style={{fontSize:11,color:C.muted,lineHeight:1.4}}>{item.sub}</div><div style={{height:3,width:42,background:"linear-gradient(90deg,"+item.color+",transparent)",borderRadius:8,marginTop:13}}/>
           </button>)}
         </div>
       </div>
@@ -1995,14 +1995,14 @@ export default function App() {
     biblioteca:<ExerciseLibrary onBack={()=>setScreen("home")}/>,
     biomecanica:<BiomechanicsCamera onBack={()=>setScreen("home")}/>,
   };
-  return <div style={{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"system-ui,-apple-system,sans-serif"}}>
+  return <div style={{minHeight:"100vh",background:"radial-gradient(ellipse at 0% 0%,rgba(245,158,11,.07),transparent 32%),radial-gradient(ellipse at 100% 40%,rgba(59,130,246,.045),transparent 30%),"+C.bg,color:C.text,fontFamily:"system-ui,-apple-system,sans-serif"}}>
     <div style={{position:"sticky",top:0,zIndex:100,background:"rgba(10,10,10,.97)",backdropFilter:"blur(10px)",borderBottom:"1px solid "+C.border,padding:"10px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
       <div style={{fontWeight:900,fontSize:18}}><span style={{color:C.accent}}>ATLETA</span>OS</div>
       <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{fontSize:11,color:C.muted}}>{profile?.nome||"Atleta"}</div><button onClick={()=>{localStorage.removeItem("atletaos_last_login");setAuthState("login")}} style={{background:"transparent",border:"1px solid "+C.border,borderRadius:6,color:C.muted,padding:"4px 8px",fontSize:10,cursor:"pointer"}}>sair</button></div>
     </div>
     <div style={{maxWidth:720,margin:"0 auto",paddingBottom:30}}>{screens[screen]||screens.home}</div>
     <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(10,10,10,.97)",borderTop:"1px solid "+C.border,display:"flex",justifyContent:"center",zIndex:90}}>
-      {[{id:"home",i:"⌂",l:"Home"},{id:"corrida",i:"🏃",l:"Corrida"},{id:"treino-dia",i:"📋",l:"Hoje"},{id:"provas",i:"🏁",l:"Provas"}].map(n=><button key={n.id} onClick={()=>setScreen(n.id)} style={{flex:1,maxWidth:140,padding:"8px 4px",background:"transparent",border:"none",color:screen===n.id?C.accent:C.muted,cursor:"pointer"}}><div style={{fontSize:17}}>{n.i}</div><div style={{fontSize:9,fontWeight:screen===n.id?700:400}}>{n.l}</div></button>)}
+      {[{id:"home",i:"⌂",l:"Home"},{id:"corrida",i:"🏃",l:"Corrida"},{id:"treino-dia",i:"📋",l:"Hoje"},{id:"biblioteca",i:"📖",l:"Biblioteca"},{id:"provas",i:"🏁",l:"Provas"}].map(n=><button key={n.id} onClick={()=>setScreen(n.id)} style={{flex:1,maxWidth:140,padding:"8px 4px",background:"transparent",border:"none",color:screen===n.id?C.accent:C.muted,cursor:"pointer"}}><div style={{fontSize:17}}>{n.i}</div><div style={{fontSize:9,fontWeight:screen===n.id?700:400}}>{n.l}</div></button>)}
     </div>
   </div>;
 }
