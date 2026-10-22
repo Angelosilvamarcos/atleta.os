@@ -12,6 +12,17 @@ const ANGLE_TRIPLETS = [
  {name:"Quadril esquerdo",a:11,b:23,c:25},
  {name:"Quadril direito",a:12,b:24,c:26},
 ];
+const BODY_POINTS = [11,12,13,14,15,16,23,24,25,26,27,28,29,30,31,32];
+const isVisible = (lm, i) => (lm[i]?.visibility ?? 0) > .45;
+function hasEnoughBody(lm, view) {
+ if (!lm || lm.length < 33) return false;
+ if (view === "lateral") {
+  return [[11,23,25,27],[12,24,26,28]].some(side => side.every(i => isVisible(lm,i)));
+ }
+ const torso = [11,12,23,24].filter(i => isVisible(lm,i)).length;
+ const lower = [25,26,27,28].filter(i => isVisible(lm,i)).length;
+ return torso >= 3 && lower >= 2;
+}
 function angle(a,b,c){
  const v1=[a.x-b.x,a.y-b.y],v2=[c.x-b.x,c.y-b.y];
  const mag=Math.hypot(...v1)*Math.hypot(...v2);
@@ -94,12 +105,13 @@ export default function BiomechanicsCamera({onBack=()=>{}}){
      const result=landmarkerRef.current.detectForVideo(v,performance.now());
      ctx.clearRect(0,0,c.width,c.height);
      const lm=result.landmarks?.[0];
-     if(lm){
+     const bodyReady=hasEnoughBody(lm,mode);
+     if(lm && bodyReady){
       setPoseVisible(true);setFrames(x=>x+1);
       ctx.lineWidth=Math.max(2,c.width/240);ctx.strokeStyle="#f59e0b";ctx.fillStyle="#22c55e";
-      for(const [a,b] of JOINTS){if((lm[a]?.visibility??0)>.45&&(lm[b]?.visibility??0)>.45){ctx.beginPath();ctx.moveTo(lm[a].x*c.width,lm[a].y*c.height);ctx.lineTo(lm[b].x*c.width,lm[b].y*c.height);ctx.stroke();}}
-      lm.forEach(p=>{if((p.visibility??0)>.5){ctx.beginPath();ctx.arc(p.x*c.width,p.y*c.height,Math.max(3,c.width/180),0,Math.PI*2);ctx.fill();}});
-      setAngles(ANGLE_TRIPLETS.map(t=>({name:t.name,value:[lm[t.a],lm[t.b],lm[t.c]].every(p=>(p.visibility??0)>.5)?angle(lm[t.a],lm[t.b],lm[t.c]):null})));
+      for(const [a,b] of JOINTS){if(isVisible(lm,a)&&isVisible(lm,b)){ctx.beginPath();ctx.moveTo(lm[a].x*c.width,lm[a].y*c.height);ctx.lineTo(lm[b].x*c.width,lm[b].y*c.height);ctx.stroke();}}
+      BODY_POINTS.forEach(i=>{const p=lm[i];if(isVisible(lm,i)){ctx.beginPath();ctx.arc(p.x*c.width,p.y*c.height,Math.max(3,c.width/180),0,Math.PI*2);ctx.fill();}});
+      setAngles(ANGLE_TRIPLETS.map(t=>({name:t.name,value:[lm[t.a],lm[t.b],lm[t.c]].every((p,i)=>p && isVisible(lm,[t.a,t.b,t.c][i]))?angle(lm[t.a],lm[t.b],lm[t.c]):null})));
      }else{setPoseVisible(false);setAngles([]);}
      lastVideoTime.current=v.currentTime;
     }
@@ -122,14 +134,14 @@ export default function BiomechanicsCamera({onBack=()=>{}}){
    <label style={{fontSize:12,color:"#a9b2c1"}}>Vista para análise<select value={mode} onChange={e=>setMode(e.target.value)} style={{display:"block",width:"100%",marginTop:5,padding:10,borderRadius:8,background:"#0c0f14",color:"#f4f6fa",border:"1px solid #353c49"}}><option value="lateral">Lateral — ciclo da passada</option><option value="frontal">Frontal — alinhamento</option><option value="posterior">Posterior — simetria</option></select></label>
    <p style={{fontSize:12,color:"#a9b2c1",lineHeight:1.5}}>{mode==="lateral"?"Posicione o celular de lado, corpo inteiro visível, em local iluminado.":mode==="frontal"?"Posicione o celular à frente, corpo inteiro visível e alinhado com a câmera.":"Posicione o celular atrás, corpo inteiro visível e alinhado com a câmera."} Faça primeiro uma gravação curta parado ou caminhando; só corra se o aparelho estiver seguro e houver espaço apropriado.</p>
    <div style={{position:"relative",width:"100%",aspectRatio:"4/3",background:"#080a0e",borderRadius:10,overflow:"hidden"}}>
-    <video ref={videoRef} muted playsInline style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",display:cameraState==="active"?"block":"none"}}/>
+    <video ref={videoRef} muted playsInline style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"contain",display:cameraState==="active"?"block":"none"}}/>
     <canvas ref={canvasRef} style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"contain",pointerEvents:"none"}}/>
     {cameraState!=="active"&&<div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",textAlign:"center",padding:20,color:"#9ca3af"}}><div><div style={{fontSize:36}}>📷</div><div style={{fontWeight:700,marginTop:8}}>{cameraState==="starting"?"Iniciando câmera…":"Câmera desligada"}</div><div style={{fontSize:12,marginTop:5}}>{cameraState==="starting"?"Solicitando permissão e carregando a análise.":"Toque em ativar para conceder permissão"}</div></div></div>}
    </div>
    {error&&<p role="alert" style={{color:"#fb7185",fontSize:12,lineHeight:1.5}}>{error}</p>}
    <div style={{display:"flex",gap:8,marginTop:12}}>{cameraState!=="active"?<button onClick={start} disabled={cameraState==="starting"} style={{...btn,flex:1,background:"#f59e0b",color:"#111",opacity:cameraState==="starting"?.7:1}}>{cameraState==="starting"?"Iniciando câmera e modelo…":"Ativar câmera"}</button>:<button onClick={stop} style={{...btn,flex:1,background:"#7f1d1d",borderColor:"#991b1b"}}>Parar câmera</button>}</div>
   </div>
-  <div style={{background:"#151922",border:"1px solid #2a303b",borderRadius:14,padding:14,marginBottom:12}}><h2 style={{fontSize:17,marginTop:0}}>Leitura em tempo real</h2>{cameraState!=="active"?<p style={{fontSize:12,color:"#a9b2c1"}}>Ative a câmera para iniciar a detecção da pose.</p>:!poseVisible?<p style={{fontSize:12,color:"#fbbf24"}}>Pose não detectada com confiança suficiente. Afaste-se um pouco, ilumine o ambiente e deixe o corpo inteiro no enquadramento.</p>:<><p style={{fontSize:12,color:"#22c55e"}}>Pose detectada • análise local ativa</p><div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:8}}>{angles.map(a=><div key={a.name} style={{background:"#0c0f14",borderRadius:9,padding:10}}><div style={{fontSize:11,color:"#a9b2c1"}}>{a.name}</div><div style={{fontSize:23,fontWeight:800,color:a.value==null?"#9ca3af":"#f59e0b"}}>{a.value==null?"—":a.value+"°"}</div></div>)}</div><p style={{fontSize:11,color:"#a9b2c1"}}>Os ângulos dependem da perspectiva, oclusão e enquadramento; não interprete valores isolados como “bons” ou “ruins”.</p></>}</div>
+  <div style={{background:"#151922",border:"1px solid #2a303b",borderRadius:14,padding:14,marginBottom:12}}><h2 style={{fontSize:17,marginTop:0}}>Leitura em tempo real</h2>{cameraState!=="active"?<p style={{fontSize:12,color:"#a9b2c1"}}>Ative a câmera para iniciar a detecção da pose.</p>:!poseVisible?<p style={{fontSize:12,color:"#fbbf24"}}>Pontos do tronco e das pernas insuficientes. Afaste o celular, mostre o corpo inteiro e mantenha ombros, quadril, joelhos e tornozelos visíveis. O app não exibirá ângulos até conseguir detectar esses pontos.</p>:<><p style={{fontSize:12,color:"#22c55e"}}>Pose detectada • análise local ativa</p><div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:8}}>{angles.map(a=><div key={a.name} style={{background:"#0c0f14",borderRadius:9,padding:10}}><div style={{fontSize:11,color:"#a9b2c1"}}>{a.name}</div><div style={{fontSize:23,fontWeight:800,color:a.value==null?"#9ca3af":"#f59e0b"}}>{a.value==null?"—":a.value+"°"}</div></div>)}</div><p style={{fontSize:11,color:"#a9b2c1"}}>Os ângulos dependem da perspectiva, oclusão e enquadramento; não interprete valores isolados como “bons” ou “ruins”.</p></>}</div>
   <div style={{background:"#151922",border:"1px solid #2a303b",borderRadius:14,padding:14,fontSize:12,lineHeight:1.6}}><b>Para uma análise útil</b><ul><li>Use apoio firme para o celular e enquadre o corpo inteiro.</li><li>Prefira roupa que permita ver a posição das articulações e boa iluminação.</li><li>Compare vídeos feitos do mesmo ângulo e distância.</li><li>Esta versão mostra esqueleto estimado e ângulos aproximados; ainda não mede com confiabilidade cadência, tempo de contato, forças, lesões ou técnica completa de corrida.</li></ul></div>
  </div>;
 }
