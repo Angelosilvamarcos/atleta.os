@@ -50,6 +50,7 @@ const btn={background:"#202632",color:"#f4f6fa",border:"1px solid #3a4250",borde
 export default function BiomechanicsCamera({onBack=()=>{}}){
  const videoRef=useRef(null),canvasRef=useRef(null),streamRef=useRef(null),landmarkerRef=useRef(null),rafRef=useRef(null),lastVideoTime=useRef(-1);
  const [cameraState,setCameraState]=useState("idle"),[error,setError]=useState(""),[angles,setAngles]=useState([]),[poseVisible,setPoseVisible]=useState(false),[mode,setMode]=useState("lateral"),[frames,setFrames]=useState(0);
+ const modeRef=useRef(mode);modeRef.current=mode;
  const stop=()=>{
   if(rafRef.current)cancelAnimationFrame(rafRef.current);rafRef.current=null;
   if(streamRef.current){streamRef.current.getTracks().forEach(t=>t.stop());streamRef.current=null;}
@@ -105,7 +106,7 @@ export default function BiomechanicsCamera({onBack=()=>{}}){
      const result=landmarkerRef.current.detectForVideo(v,performance.now());
      ctx.clearRect(0,0,c.width,c.height);
      const lm=result.landmarks?.[0];
-     const bodyReady=hasEnoughBody(lm,mode);
+     const bodyReady=hasEnoughBody(lm,modeRef.current);
      if(lm && bodyReady){
       setPoseVisible(true);setFrames(x=>x+1);
       ctx.lineWidth=Math.max(2,c.width/240);ctx.strokeStyle="#f59e0b";ctx.fillStyle="#22c55e";
