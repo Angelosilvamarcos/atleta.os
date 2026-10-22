@@ -266,8 +266,6 @@ function FatigueMeter({ score }) {
 // ── MENU PRINCIPAL ─────────────────────────────────────────────────────────
 const MENU_ITEMS = [
   { id: "corrida",     icon: "🏃", label: "Corrida",      sub: "Performance & Plano",  color: C.accent },
-  { id: "alimentacao", icon: "🥗", label: "Alimentação",  sub: "Nutrição & Refeições", color: C.green },
-  { id: "core",        icon: "💪", label: "Core",         sub: "Exercícios & Sessões", color: C.blue },
   { id: "provas",      icon: "🏆", label: "Provas 2026",  sub: "Calendário & Tempos",  color: C.purple },
   { id: "treino-dia",  icon: "📋", label: "Treino do Dia",sub: "Sequência cronometrada",color: "#06b6d4" },
   { id: "biblioteca", icon: "🧩", label: "Biblioteca 5 km", sub: "Técnica, força & coordenação", color: C.accent },
@@ -2002,7 +2000,7 @@ export default function App() {
     </div>
     <div style={{maxWidth:720,margin:"0 auto",paddingBottom:30}}>{screens[screen]||screens.home}</div>
     <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(10,10,10,.97)",borderTop:"1px solid "+C.border,display:"flex",justifyContent:"center",zIndex:90}}>
-      {[{id:"home",i:"⌂",l:"Home"},{id:"corrida",i:"🏃",l:"Corrida"},{id:"treino-dia",i:"📋",l:"Hoje"},{id:"provas",i:"🏁",l:"Provas"}].map(n=><button key={n.id} onClick={()=>setScreen(n.id)} style={{flex:1,maxWidth:140,padding:"8px 4px",background:"transparent",border:"none",color:screen===n.id?C.accent:C.muted,cursor:"pointer"}}><div style={{fontSize:17}}>{n.i}</div><div style={{fontSize:9,fontWeight:screen===n.id?700:400}}>{n.l}</div></button>)}
+      {[{id:"home",i:"⌂",l:"Home"},{id:"corrida",i:"🏃",l:"Corrida"},{id:"treino-dia",i:"📋",l:"Hoje"},{id:"biblioteca",i:"📖",l:"Biblioteca"},{id:"provas",i:"🏁",l:"Provas"}].map(n=><button key={n.id} onClick={()=>setScreen(n.id)} style={{flex:1,maxWidth:140,padding:"8px 4px",background:"transparent",border:"none",color:screen===n.id?C.accent:C.muted,cursor:"pointer"}}><div style={{fontSize:17}}>{n.i}</div><div style={{fontSize:9,fontWeight:screen===n.id?700:400}}>{n.l}</div></button>)}
     </div>
   </div>;
 }
